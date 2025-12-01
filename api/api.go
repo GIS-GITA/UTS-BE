@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -49,11 +50,13 @@ var (
 // --- FUNGSI KONEKSI DB (Aman dengan sync.Once) ---
 func initDB() {
 	dbOnce.Do(func() {
+		// Load .env jika belum di-load di main
+		godotenv.Load()
+
 		// Gunakan Environment Variable untuk keamanan
 		mongoURI := os.Getenv("MONGO_URI")
 		if mongoURI == "" {
-			// Fallback hanya untuk local jika lupa set env, tapi sebaiknya gunakan .env
-			mongoURI = "mongodb+srv://mhaitsamia:Ebg4K8HzMEWOCESZ@presensi.g9kkirr.mongodb.net/"
+			log.Fatal("❌ MONGO_URI environment variable tidak ditemukan. Silakan set di .env atau environment")
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -65,22 +68,24 @@ func initDB() {
 		}
 
 		collection = client.Database("gis_db").Collection("locations")
-		
+
 		// Create Index (Optional, best effort)
 		indexModel := mongo.IndexModel{Keys: bson.M{"geometry": "2dsphere"}}
 		collection.Indexes().CreateOne(ctx, indexModel)
-		
+
 		log.Println("✅ Connected to MongoDB!")
 	})
 }
 
-// --- MIDDLEWARE CORS (Solusi Error FE Anda) ---
+// --- MIDDLEWARE CORS ---
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*") // Izinkan semua domain
+		// Set header CORS
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 
+		// PENTING: Jika request adalah OPTIONS (preflight), langsung return OK tanpa lanjut ke handler lain
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -101,7 +106,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 	feature.Type = "Feature"
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	result, err := collection.InsertOne(ctx, feature)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -122,7 +127,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer cursor.Close(ctx)
-	
+
 	// Pastikan array tidak nil
 	features = make([]LocationFeature, 0)
 	if err = cursor.All(ctx, &features); err != nil {
@@ -193,7 +198,7 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 func SetupRouter() *mux.Router {
 	initDB() // Pastikan DB connect
 	r := mux.NewRouter()
-	
+
 	// Terapkan CORS
 	r.Use(corsMiddleware)
 
