@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -194,12 +193,7 @@ func main() {
 	r.HandleFunc("/locations/{id}", updateLocation).Methods("PUT")
 	r.HandleFunc("/locations/{id}", deleteLocation).Methods("DELETE")
 
-	// CORS Middleware
-	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
-
-	// Start Server
+	// Start Server (no CORS middleware)
 	log.Println("Server is running on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
